@@ -4,13 +4,19 @@ using System.Web.Mvc;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.EntityFramework;
 using Microsoft.Owin.Security;
+using MvcMusicStore.Infrastructure;
 using MvcMusicStore.Models;
+using NLog;
+using PerformanceCounterHelper;
 
 namespace MvcMusicStore.Controllers
 {
     [Authorize]
     public class AccountController : Controller
     {
+        private readonly CounterHelper<MvcMusicStoreCounters> _musicStoreCounterHelper;
+        private readonly ILogger _logger;
+
         public enum ManageMessageId
         {
             ChangePasswordSuccess,
@@ -23,14 +29,16 @@ namespace MvcMusicStore.Controllers
 
         private UserManager<ApplicationUser> _userManager;
 
-        public AccountController()
-            : this(new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(new ApplicationDbContext())))
-        {
+        public AccountController(CounterHelper<MvcMusicStoreCounters> musicStoreCounterHelper, ILogger logger)
+            : this(new UserManager<ApplicationUser>(new UserStore<ApplicationUser>(new ApplicationDbContext())), musicStoreCounterHelper, logger)
+        {   
         }
 
-        public AccountController(UserManager<ApplicationUser> userManager)
+        public AccountController(UserManager<ApplicationUser> userManager, CounterHelper<MvcMusicStoreCounters> musicStoreCounterHelper, ILogger logger)
         {
             _userManager = userManager;
+            _musicStoreCounterHelper = musicStoreCounterHelper;
+            _logger = logger;
         }
 
         private IAuthenticationManager AuthenticationManager
@@ -71,12 +79,17 @@ namespace MvcMusicStore.Controllers
                 if (user != null)
                 {
                     await SignInAsync(user, model.RememberMe);
+                    _logger.Trace($"User id: {user.Id}, name: {user.UserName}. Login user.");
+
+                    _musicStoreCounterHelper.Increment(MvcMusicStoreCounters.SuccessLogIn);
 
                     return RedirectToLocal(returnUrl);
                 }
 
                 ModelState.AddModelError("", "Invalid username or password.");
             }
+
+            _musicStoreCounterHelper.Increment(MvcMusicStoreCounters.FailedLogIn);
 
             return View(model);
         }
@@ -318,6 +331,8 @@ namespace MvcMusicStore.Controllers
         public ActionResult LogOff()
         {
             AuthenticationManager.SignOut();
+
+            _musicStoreCounterHelper.Increment(MvcMusicStoreCounters.SuccessLogOff);
 
             return RedirectToAction("Index", "Home");
         }

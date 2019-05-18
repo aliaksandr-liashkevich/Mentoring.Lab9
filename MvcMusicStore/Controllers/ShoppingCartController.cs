@@ -4,12 +4,19 @@ using System.Threading.Tasks;
 using System.Web.Mvc;
 using MvcMusicStore.Models;
 using MvcMusicStore.ViewModels;
+using NLog;
 
 namespace MvcMusicStore.Controllers
 {
     public class ShoppingCartController : Controller
     {
         private readonly MusicStoreEntities _storeContext = new MusicStoreEntities();
+        private readonly ILogger _logger;
+
+        public ShoppingCartController(ILogger logger)
+        {
+            _logger = logger;
+        }
 
         // GET: /ShoppingCart/
         public async Task<ActionResult> Index()
@@ -30,7 +37,9 @@ namespace MvcMusicStore.Controllers
         {
             var cart = ShoppingCart.GetCart(_storeContext, this);
 
-            await cart.AddToCart(await _storeContext.Albums.SingleAsync(a => a.AlbumId == id));
+            var album = await _storeContext.Albums.SingleAsync(a => a.AlbumId == id);
+            await cart.AddToCart(album);
+            _logger.Info($"Album name: {album.Title}. Album was added.");
 
             await _storeContext.SaveChangesAsync();
 
